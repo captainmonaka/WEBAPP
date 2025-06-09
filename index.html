@@ -39,13 +39,12 @@
         .loading { font-size: 1.3em; font-weight: 500; }
         .video-wrapper { position: relative; padding-top: 56.25%; background-color: #000; overflow: hidden; }
         
-        /* ★★★ 修正点3：クロップ範囲を調整 ★★★ */
         #player { 
             position: absolute; 
-            top: -50px;
-            left: -50px;
-            width: calc(100% + 100px);
-            height: calc(100% + 100px);
+            top: -40px;
+            left: -40px;
+            width: calc(100% + 80px);
+            height: calc(100% + 80px);
         }
         
         #player-cover { 
@@ -205,7 +204,6 @@
             }
             document.getElementById('result-action-area').style.visibility = 'hidden';
             feedbackOverlay.classList.remove('visible');
-            playerCover.classList.remove('blackout'); // ★★★ 修正点2：ブラックアウトをここで解除
             showScreen('game-screen');
             setupQuiz();
         }
@@ -294,7 +292,7 @@
         });
 
         function showFinalResults() {
-            feedbackOverlay.classList.remove('visible'); // ★★★ 修正点1：結果画面表示時に顔文字を消す
+            feedbackOverlay.classList.remove('visible'); 
             let comment = '';
             if (score === TOTAL_QUESTIONS) comment = '全問正解！素晴らしい！';
             else if (score >= TOTAL_QUESTIONS * 0.7) comment = 'お見事！かなりのファンですね！';
@@ -335,6 +333,7 @@
         }
 
         function onPlayerReady(event) {
+            playerCover.classList.remove('blackout'); // ★★★ 修正点：ここでブラックアウトを解除
             player.setVolume(currentVolume);
             if (isMuted) player.mute(); else player.unMute();
             event.target.playVideo();
