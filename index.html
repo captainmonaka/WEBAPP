@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTubeワンシーンクイズ</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #64b5f6;
+            --primary-hover-color: #42a5f5;
+            --correct-color: #81c784;
+            --wrong-color: #e57373;
+            --container-bg: rgba(255, 255, 255, 0.85);
+            --text-color: #555;
+            --light-text-color: #777;
+        }
+        body { 
+            font-family: 'M PLUS Rounded 1c', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            background: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%);
+            margin: 0; padding: 20px; text-align: center; 
+            display: flex; justify-content: center; align-items: center; min-height: 100vh;
+            color: var(--text-color);
+        }
+        .quiz-container { 
+            max-width: 800px; width: 100%; margin: auto; 
+            background-color: var(--container-bg);
+            backdrop-filter: blur(10px);
+            border-radius: 20px; 
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12); 
+            overflow: hidden; position: relative;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .screen { display: none; }
+        .screen.active { display: block; }
+        #loading-screen { padding: 50px; }
+        .loading { font-size: 1.3em; font-weight: 500; }
+        .video-wrapper { position: relative; padding-top: 56.25%; background-color: #000; overflow: hidden; }
+        #player { position: absolute; top: -50px; left: -50px; width: calc(100% + 100px); height: calc(100% + 100px); }
+        #player-cover { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; }
+        .player-controls { position: absolute; top: 15px; right: 15px; z-index: 20; display: flex; align-items: center; gap: 10px; }
+        #mute-btn { width: 40px; height: 40px; background-color: rgba(0, 0, 0, 0.5); border: none; border-radius: 50%; cursor: pointer; display: flex; justify-content: center; align-items: center; color: white; padding: 0; transition: background-color 0.2s; }
+        #mute-btn:hover { background-color: rgba(0, 0, 0, 0.7); }
+        #mute-btn svg { width: 24px; height: 24px; fill: currentColor; }
+        #volume-slider { -webkit-appearance: none; width: 100px; height: 5px; background: rgba(255, 255, 255, 0.4); border-radius: 5px; outline: none; transition: opacity 0.2s; cursor: pointer; }
+        #volume-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; background: #fff; border-radius: 50%; cursor: pointer; }
+        .question-header { padding: 25px; padding-bottom: 15px; }
+        .question-number { font-size: 1.4em; font-weight: 700; margin-bottom: 8px; color: var(--primary-color); }
+        .question-text { font-size: 1.1em; color: var(--light-text-color); }
+        .options-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; padding: 0 25px 25px; }
+        .option { border: 4px solid transparent; border-radius: 12px; overflow: hidden; cursor: pointer; transition: all 0.25s ease; background-color: #fff; display: flex; flex-direction: column; align-items: center; padding-top: 10px; }
+        .option.correct-answer { border-color: var(--correct-color); }
+        .option.wrong-answer { border-color: var(--wrong-color); }
+        .option:hover { transform: translateY(-5px); box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1); }
+        .option img { width: 80%; display: block; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px; }
+        .option p { width: 100%; margin: 0; padding: 12px; font-size: 0.9em; color: var(--text-color); min-height: 44px; display: flex; align-items: center; justify-content: center; }
+        #result-action-area { padding: 25px; }
+        #next-btn, #try-again-btn { padding: 14px 30px; font-size: 1.1em; font-weight: 700; color: #fff; background-color: var(--primary-color); border: none; border-radius: 30px; cursor: pointer; transition: all 0.2s ease; }
+        #next-btn:hover, #try-again-btn:hover { background-color: var(--primary-hover-color); transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        #feedback-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 30; background: rgba(0,0,0,0.4); display: flex; justify-content: center; align-items: center; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
+        #feedback-overlay.visible { opacity: 1; }
+        #feedback-kaomoji { color: white; font-size: 6rem; font-weight: bold; text-shadow: 0 0 15px rgba(0,0,0,0.5); transform: scale(0.5); transition: transform 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28); }
+        #feedback-overlay.visible #feedback-kaomoji { transform: scale(1); }
+        #final-result-screen { padding: 40px; }
+        #final-score { font-size: 2.2em; font-weight: 700; margin-bottom: 10px; color: var(--primary-color); }
+        #final-comment { font-size: 1.2em; color: var(--light-text-color); margin-bottom: 30px; }
+        #result-list { max-height: 40vh; overflow-y: auto; padding-right: 15px; margin-bottom: 30px; text-align: left;}
+        .result-item { display: flex; align-items: center; margin-bottom: 15px; background: #fff; border-radius: 12px; padding: 12px; }
+        .result-status { font-weight: 700; margin-right: 15px; width: 40px; text-align: center; }
+        .result-status.correct { color: var(--correct-color); }
+        .result-status.wrong { color: var(--wrong-color); }
+        .result-thumb { width: 100px; height: 56.25px; border-radius: 8px; object-fit: cover; margin-right: 15px; flex-shrink: 0; }
+        .result-video-info { flex: 1; min-width: 0; }
+        .result-title { font-size: 0.95em; font-weight: 500; margin: 0 0 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .result-link { font-size: 0.85em; color: var(--primary-color); text-decoration: none; font-weight: 500;}
+        .result-link:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+
+    <div class="quiz-container">
+        <div id="loading-screen" class="screen active">
+            <div id="loading-text" class="loading">クイズの準備中...</div>
+        </div>
+        
+        <div id="game-screen" class="screen">
+            <div class="player-controls">
+                <button id="mute-btn"></button>
+                <input type="range" min="0" max="100" value="50" id="volume-slider">
+            </div>
+            <div class="video-wrapper">
+                <div id="player"></div>
+                <div id="player-cover"></div>
+            </div>
+            <div class="question-header">
+                <div id="question-number" class="question-number"></div>
+                <div class="question-text">この10秒のシーンは、どの動画のものでしょう？</div>
+            </div>
+            <div class="options-grid" id="options-grid"></div>
+            <div id="result-action-area" style="visibility: hidden;">
+                <button id="next-btn"></button>
+            </div>
+        </div>
+
+        <div id="final-result-screen" class="screen">
+            <div id="final-score"></div>
+            <div id="final-comment"></div>
+            <div id="result-list"></div>
+            <button id="try-again-btn">もう一度挑戦する</button>
+        </div>
+
+        <div id="feedback-overlay">
+            <div id="feedback-kaomoji"></div>
+        </div>
+    </div>
+
+    <script>
+        // ★★★ ここを編集してください ★★★
+        const apiKey = 'AIzaSyDe1C6l4n3BEaTlHFgqfWctG2P2crw3v3U';
+        const channelId = 'UCp6993wxpyDPHUpavwDFqgg';
+        // ★★★ 編集はここまで ★★★
+
+        const TOTAL_QUESTIONS = 10;
+        const MIN_VIDEO_DURATION_SECONDS = 300; // 5分
+        
+        const loadingScreen = document.getElementById('loading-screen');
+        const loadingText = document.getElementById('loading-text');
+        const gameScreen = document.getElementById('game-screen');
+        const finalResultScreen = document.getElementById('final-result-screen');
+        const optionsGrid = document.getElementById('options-grid');
+        const nextBtn = document.getElementById('next-btn');
+        const tryAgainBtn = document.getElementById('try-again-btn');
+        const muteBtn = document.getElementById('mute-btn');
+        const volumeSlider = document.getElementById('volume-slider');
+        const feedbackOverlay = document.getElementById('feedback-overlay');
+        const feedbackKaomoji = document.getElementById('feedback-kaomoji');
+        
+        let player, allVideos = [], correctAnswerVideo = null, quizResults = [];
+        let currentQuestionNumber = 0, score = 0;
+        let isMuted = false, currentVolume = 50, lastUnmutedVolume = 50;
+        
+        const speakerOnIcon = `<svg viewBox="0 0 24 24"><path d="M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.84 14,18.7V20.77C18,19.86 21,16.28 21,12C21,7.72 18,4.14 14,3.23M16.5,12C16.5,10.23 15.5,8.71 14,7.97V16C15.5,15.29 16.5,13.76 16.5,12M3,9V15H7L12,20V4L7,9H3Z"></path></svg>`;
+        const speakerOffIcon = `<svg viewBox="0 0 24 24"><path d="M12,4L7,9H3V15H7L12,20V4M16.5,12C16.5,10.23 15.5,8.71 14,7.97V16C15.5,15.29 16.5,13.76 16.5,12M19,12C19,15.17 16.89,17.84 14,18.7V20.77C18,19.86 21,16.28 21,12C21,7.72 18,4.14 14,3.23Z" style="opacity:0.5"></path><path d="M2.35 2.7L1 5.05l3.8 3.8H3v6h4l5 5v-6.7l4.95 4.95c-.75.64-1.6 1.16-2.55 1.54v2.05c1.5-.43 2.82-1.25 3.9-2.34L21 21.05l-2.35-2.35L2.35 2.7z"></path></svg>`;
+
+        var tag = document.createElement('script');
+        tag.src = "https://www.youtube.com/iframe_api";
+        var firstScriptTag = document.getElementsByTagName('script')[0];
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+        
+        function onYouTubeIframeAPIReady() { initializeApp(); }
+
+        function showScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(screenId).classList.add('active');
+        }
+
+        async function initializeApp() {
+            updateMuteButton();
+            volumeSlider.value = currentVolume;
+            try {
+                allVideos = await fetchAllChannelVideos(channelId, apiKey);
+                allVideos = allVideos.filter(v => parseDuration(v.contentDetails.duration) >= MIN_VIDEO_DURATION_SECONDS);
+                if (allVideos.length >= 4) {
+                    startQuiz();
+                } else {
+                    loadingText.textContent = `クイズを作成できません。チャンネルに4本以上の動画（${MIN_VIDEO_DURATION_SECONDS/60}分以上）がないか、APIキーが正しくありません。`;
+                }
+            } catch (error) {
+                loadingText.textContent = `エラー: ${error.message} APIキーやチャンネルIDを確認してください。`;
+            }
+        }
+
+        function startQuiz() {
+            currentQuestionNumber = 0;
+            score = 0;
+            quizResults = [];
+            setupNextQuestion();
+        }
+
+        function setupNextQuestion() {
+            currentQuestionNumber++;
+            const questionNumberEl = document.getElementById('question-number');
+            if (currentQuestionNumber === 1) {
+                questionNumberEl.textContent = "サンプル問題";
+            } else {
+                questionNumberEl.textContent = `問題 ${currentQuestionNumber - 1} / ${TOTAL_QUESTIONS}`;
+            }
+            document.getElementById('result-action-area').style.visibility = 'hidden';
+            feedbackOverlay.classList.remove('visible');
+            showScreen('game-screen');
+            setupQuiz();
+        }
+
+        async function setupQuiz() {
+            optionsGrid.innerHTML = '<p style="grid-column: 1 / -1;">クイズを生成中...</p>';
+            
+            const availableVideos = [...allVideos];
+            correctAnswerVideo = availableVideos.splice(Math.floor(Math.random() * availableVideos.length), 1)[0];
+            const correctTitlePrefix = correctAnswerVideo.snippet.title.substring(0, 5);
+
+            // 1. まずはタイトルが似ている動画を優先的に探す
+            let wrongOptions = availableVideos.filter(v => 
+                v.snippet.title.startsWith(correctTitlePrefix) && v.id !== correctAnswerVideo.id
+            );
+            
+            // 2. 似たタイトルの動画が足りなければ、ランダムな動画で補う
+            if (wrongOptions.length < 3) {
+                const existingIds = new Set(wrongOptions.map(v => v.id));
+                existingIds.add(correctAnswerVideo.id);
+                
+                const otherCandidates = availableVideos.filter(v => !existingIds.has(v.id));
+                shuffleArray(otherCandidates);
+                wrongOptions.push(...otherCandidates.slice(0, 3 - wrongOptions.length));
+            }
+            shuffleArray(wrongOptions);
+            const selectedWrongOptions = wrongOptions.slice(0, 3);
+            
+            const selectedVideos = [correctAnswerVideo, ...selectedWrongOptions];
+            shuffleArray(selectedVideos);
+
+            const startTime = getRandomStartTime(correctAnswerVideo);
+            createPlayer(correctAnswerVideo.id, startTime);
+
+            optionsGrid.innerHTML = '';
+            selectedVideos.forEach(video => {
+                const optionDiv = document.createElement('div');
+                optionDiv.className = 'option';
+                optionDiv.dataset.videoid = video.id;
+                optionDiv.onclick = () => checkAnswer(optionDiv, video.id);
+                optionDiv.innerHTML = `<img src="${video.snippet.thumbnails.medium.url}" alt=""><p>${video.snippet.title}</p>`;
+                optionsGrid.appendChild(optionDiv);
+            });
+        }
+
+        function checkAnswer(selectedOption, selectedVideoId) {
+            document.querySelectorAll('.option').forEach(opt => opt.style.pointerEvents = 'none');
+            const isCorrect = selectedVideoId === correctAnswerVideo.id;
+            
+            if (currentQuestionNumber > 1) {
+                if (isCorrect) score++;
+                quizResults.push({
+                    isCorrect: isCorrect,
+                    correctVideo: { id: correctAnswerVideo.id, title: correctAnswerVideo.snippet.title, thumbnail: correctAnswerVideo.snippet.thumbnails.medium.url }
+                });
+            }
+
+            if (isCorrect) {
+                selectedOption.classList.add('correct-answer');
+                showFeedbackKaomoji('(๑╹ᆺ╹)');
+            } else {
+                selectedOption.classList.add('wrong-answer');
+                document.querySelector(`[data-videoid="${correctAnswerVideo.id}"]`).classList.add('correct-answer');
+                showFeedbackKaomoji('(？？ᆺ？)');
+            }
+            
+            if (currentQuestionNumber === 1) {
+                nextBtn.textContent = 'クイズを始める！';
+            } else if (currentQuestionNumber < TOTAL_QUESTIONS + 1) {
+                nextBtn.textContent = '次の問題へ';
+            } else {
+                nextBtn.textContent = '結果を見る';
+            }
+            document.getElementById('result-action-area').style.visibility = 'visible';
+        }
+
+        function showFeedbackKaomoji(kaomoji) {
+            feedbackKaomoji.textContent = kaomoji;
+            feedbackOverlay.classList.add('visible');
+        }
+        
+        nextBtn.addEventListener('click', () => {
+            if (currentQuestionNumber < TOTAL_QUESTIONS + 1) {
+                setupNextQuestion();
+            } else {
+                showFinalResults();
+            }
+        });
+
+        function showFinalResults() {
+            let comment = '';
+            if (score === TOTAL_QUESTIONS) comment = '全問正解！素晴らしい！';
+            else if (score >= TOTAL_QUESTIONS * 0.7) comment = 'お見事！かなりのファンですね！';
+            else if (score >= TOTAL_QUESTIONS * 0.4) comment = 'まずまずの結果です！';
+            else comment = 'もう少し頑張りましょう！';
+
+            document.getElementById('final-score').textContent = `${TOTAL_QUESTIONS}問中 ${score}問 正解！`;
+            document.getElementById('final-comment').textContent = comment;
+
+            const resultList = document.getElementById('result-list');
+            resultList.innerHTML = '';
+            quizResults.forEach((result, index) => {
+                const item = document.createElement('div');
+                item.className = 'result-item';
+                const statusText = result.isCorrect ? '正解' : '不正解';
+                const statusClass = result.isCorrect ? 'correct' : 'wrong';
+                const video = result.correctVideo;
+                item.innerHTML = `
+                    <div class="result-status ${statusClass}">${statusText}</div>
+                    <img src="${video.thumbnail}" alt="" class="result-thumb">
+                    <div class="result-video-info">
+                        <p class="result-title">Q${index + 1}. ${video.title}</p>
+                        <a href="https://www.youtube.com/watch?v=${video.id}" target="_blank" class="result-link">正解の動画を見る</a>
+                    </div>
+                `;
+                resultList.appendChild(item);
+            });
+            showScreen('final-result-screen');
+        }
+
+        function createPlayer(videoId, startTime) {
+            const playerVars = { 'start': startTime, 'end': startTime + 10, 'autoplay': 1, 'controls': 0, 'rel': 0, 'iv_load_policy': 3, 'loop': 1, 'playlist': videoId, 'modestbranding': 1 };
+            if (player) {
+                player.loadVideoById({ videoId: videoId, startSeconds: startTime, endSeconds: startTime + 10 });
+            } else {
+                player = new YT.Player('player', { videoId: videoId, playerVars: playerVars, events: { 'onReady': onPlayerReady }});
+            }
+        }
+        function onPlayerReady(event) {
+            player.setVolume(currentVolume);
+            if (isMuted) player.mute(); else player.unMute();
+            event.target.playVideo();
+        }
+        function updateMuteButton() { muteBtn.innerHTML = isMuted ? speakerOffIcon : speakerOnIcon; }
+        tryAgainBtn.addEventListener('click', () => { location.reload(); });
+        muteBtn.addEventListener('click', () => {
+            if (!player) return; isMuted = !isMuted;
+            if (isMuted) { lastUnmutedVolume = currentVolume > 0 ? currentVolume : 50; player.mute(); volumeSlider.value = 0;
+            } else { player.unMute(); currentVolume = lastUnmutedVolume; volumeSlider.value = currentVolume; player.setVolume(currentVolume); }
+            updateMuteButton();
+        });
+        volumeSlider.addEventListener('input', (e) => {
+            if (!player) return; currentVolume = Number(e.target.value); player.setVolume(currentVolume);
+            isMuted = currentVolume === 0; if(isMuted) player.mute(); else player.unMute(); updateMuteButton();
+        });
+        
+        function parseDuration(duration) {
+            const matches = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+            if (!matches) return 0;
+            return (parseInt(matches[1] || 0) * 3600) + (parseInt(matches[2] || 0) * 60) + (parseInt(matches[3] || 0));
+        }
+
+        async function fetchAllChannelVideos(channelId, apiKey) {
+            const cacheKey = `video_cache_${channelId}_v2`; const cachedData = localStorage.getItem(cacheKey); const now = new Date().getTime();
+            if (cachedData) { const { timestamp, videos } = JSON.parse(cachedData); if (now - timestamp < 6 * 60 * 60 * 1000) { return videos; } }
+            const channelResponse = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=contentDetails&id=${channelId}&key=${apiKey}`);
+            const channelData = await channelResponse.json(); if (!channelData.items || channelData.items.length === 0) throw new Error("チャンネルが見つかりません。");
+            const uploadsPlaylistId = channelData.items[0].contentDetails.relatedPlaylists.uploads; let videoIds = [], nextPageToken = '';
+            for (let i = 0; i < 5 && (i === 0 || nextPageToken); i++) {
+                const playlistResponse = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails&playlistId=${uploadsPlaylistId}&key=${apiKey}&maxResults=50&pageToken=${nextPageToken}`);
+                const playlistData = await playlistResponse.json(); videoIds.push(...playlistData.items.map(item => item.contentDetails.videoId)); nextPageToken = playlistData.nextPageToken;
+            }
+            let videos = [];
+            for (let i = 0; i < videoIds.length; i += 50) {
+                const videoDetailsResponse = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${videoIds.slice(i, i + 50).join(',')}&key=${apiKey}`);
+                const videoDetailsData = await videoDetailsResponse.json(); videos.push(...videoDetailsData.items);
+            }
+            const filteredVideos = videos.filter(v => v.snippet.title !== "Private video" && v.snippet.title !== "Deleted video");
+            localStorage.setItem(cacheKey, JSON.stringify({ timestamp: now, videos: filteredVideos }));
+            return filteredVideos;
+        }
+
+        function getRandomStartTime(video) {
+            const duration = parseDuration(video.contentDetails.duration);
+            const minStartTime = MIN_VIDEO_DURATION_SECONDS;
+            const maxStartTime = duration - 11; // 終了11秒前まで
+            if (minStartTime >= maxStartTime) {
+                return minStartTime; // 再生範囲がない場合は、最低開始時間から再生
+            }
+            // 5分以降で、動画の終わり11秒前までの間でランダムな時間を生成
+            return Math.floor(Math.random() * (maxStartTime - minStartTime + 1)) + minStartTime;
+        }
+
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [array[i], array[j]] = [array[j], array[i]]; }
+        }
+    </script>
+</body>
+</html>
