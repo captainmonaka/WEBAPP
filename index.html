@@ -38,8 +38,23 @@
         #loading-screen { padding: 50px; }
         .loading { font-size: 1.3em; font-weight: 500; }
         .video-wrapper { position: relative; padding-top: 56.25%; background-color: #000; overflow: hidden; }
-        #player { position: absolute; top: -50px; left: -50px; width: calc(100% + 100px); height: calc(100% + 100px); }
-        #player-cover { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; }
+        
+        /* ★★★ 修正点3：クロップ範囲を調整 ★★★ */
+        #player { 
+            position: absolute; 
+            top: -50px;
+            left: -50px;
+            width: calc(100% + 100px);
+            height: calc(100% + 100px);
+        }
+        
+        #player-cover { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10;
+            background-color: transparent;
+            transition: background-color 0.2s;
+        }
+        #player-cover.blackout { background-color: #000; }
+
         .player-controls { position: absolute; top: 15px; right: 15px; z-index: 20; display: flex; align-items: center; gap: 10px; }
         #mute-btn { width: 40px; height: 40px; background-color: rgba(0, 0, 0, 0.5); border: none; border-radius: 50%; cursor: pointer; display: flex; justify-content: center; align-items: center; color: white; padding: 0; transition: background-color 0.2s; }
         #mute-btn:hover { background-color: rgba(0, 0, 0, 0.7); }
@@ -61,7 +76,7 @@
         #next-btn:hover, #try-again-btn:hover { background-color: var(--primary-hover-color); transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
         #feedback-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 30; background: rgba(0,0,0,0.4); display: flex; justify-content: center; align-items: center; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
         #feedback-overlay.visible { opacity: 1; }
-        #feedback-kaomoji { color: white; font-size: 6rem; font-weight: bold; text-shadow: 0 0 15px rgba(0,0,0,0.5); transform: scale(0.5); transition: transform 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28); }
+        #feedback-kaomoji { color: white; font-size: 3rem; font-weight: bold; text-shadow: 0 0 15px rgba(0,0,0,0.5); transform: scale(0.5); transition: transform 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28); }
         #feedback-overlay.visible #feedback-kaomoji { transform: scale(1); }
         #final-result-screen { padding: 40px; }
         #final-score { font-size: 2.2em; font-weight: 700; margin-bottom: 10px; color: var(--primary-color); }
@@ -136,6 +151,7 @@
         const volumeSlider = document.getElementById('volume-slider');
         const feedbackOverlay = document.getElementById('feedback-overlay');
         const feedbackKaomoji = document.getElementById('feedback-kaomoji');
+        const playerCover = document.getElementById('player-cover');
         
         let player, allVideos = [], correctAnswerVideo = null, quizResults = [];
         let currentQuestionNumber = 0, score = 0;
@@ -189,6 +205,7 @@
             }
             document.getElementById('result-action-area').style.visibility = 'hidden';
             feedbackOverlay.classList.remove('visible');
+            playerCover.classList.remove('blackout'); // ★★★ 修正点2：ブラックアウトをここで解除
             showScreen('game-screen');
             setupQuiz();
         }
@@ -200,12 +217,10 @@
             correctAnswerVideo = availableVideos.splice(Math.floor(Math.random() * availableVideos.length), 1)[0];
             const correctTitlePrefix = correctAnswerVideo.snippet.title.substring(0, 5);
 
-            // 1. まずはタイトルが似ている動画を優先的に探す
             let wrongOptions = availableVideos.filter(v => 
                 v.snippet.title.startsWith(correctTitlePrefix) && v.id !== correctAnswerVideo.id
             );
             
-            // 2. 似たタイトルの動画が足りなければ、ランダムな動画で補う
             if (wrongOptions.length < 3) {
                 const existingIds = new Set(wrongOptions.map(v => v.id));
                 existingIds.add(correctAnswerVideo.id);
@@ -279,6 +294,7 @@
         });
 
         function showFinalResults() {
+            feedbackOverlay.classList.remove('visible'); // ★★★ 修正点1：結果画面表示時に顔文字を消す
             let comment = '';
             if (score === TOTAL_QUESTIONS) comment = '全問正解！素晴らしい！';
             else if (score >= TOTAL_QUESTIONS * 0.7) comment = 'お見事！かなりのファンですね！';
@@ -308,20 +324,28 @@
             });
             showScreen('final-result-screen');
         }
-
+        
         function createPlayer(videoId, startTime) {
-            const playerVars = { 'start': startTime, 'end': startTime + 10, 'autoplay': 1, 'controls': 0, 'rel': 0, 'iv_load_policy': 3, 'loop': 1, 'playlist': videoId, 'modestbranding': 1 };
+            const playerVars = { 'start': startTime, 'end': startTime + 10, 'autoplay': 1, 'controls': 0, 'rel': 0, 'iv_load_policy': 3, 'loop': 0, 'playlist': videoId, 'modestbranding': 1 };
             if (player) {
                 player.loadVideoById({ videoId: videoId, startSeconds: startTime, endSeconds: startTime + 10 });
             } else {
-                player = new YT.Player('player', { videoId: videoId, playerVars: playerVars, events: { 'onReady': onPlayerReady }});
+                player = new YT.Player('player', { videoId: videoId, playerVars: playerVars, events: { 'onReady': onPlayerReady, 'onStateChange': onPlayerStateChange }});
             }
         }
+
         function onPlayerReady(event) {
             player.setVolume(currentVolume);
             if (isMuted) player.mute(); else player.unMute();
             event.target.playVideo();
         }
+
+        function onPlayerStateChange(event) {
+            if (event.data === YT.PlayerState.ENDED) {
+                playerCover.classList.add('blackout');
+            }
+        }
+
         function updateMuteButton() { muteBtn.innerHTML = isMuted ? speakerOffIcon : speakerOnIcon; }
         tryAgainBtn.addEventListener('click', () => { location.reload(); });
         muteBtn.addEventListener('click', () => {
@@ -364,11 +388,10 @@
         function getRandomStartTime(video) {
             const duration = parseDuration(video.contentDetails.duration);
             const minStartTime = MIN_VIDEO_DURATION_SECONDS;
-            const maxStartTime = duration - 11; // 終了11秒前まで
+            const maxStartTime = duration - 11;
             if (minStartTime >= maxStartTime) {
-                return minStartTime; // 再生範囲がない場合は、最低開始時間から再生
+                return minStartTime;
             }
-            // 5分以降で、動画の終わり11秒前までの間でランダムな時間を生成
             return Math.floor(Math.random() * (maxStartTime - minStartTime + 1)) + minStartTime;
         }
 
